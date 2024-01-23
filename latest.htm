@@ -1,0 +1,514 @@
+<!doctype html><meta charset=utf-8>
+<title>Dots Algo</title>
+<style>
+*{font-family:sans-serif}
+h2{padding:10px;margin:0;text-align:center;}
+h2 {border: 2px solid #3498db;padding: 10px;background-color: #259ebc; color: #2c3e50; font-family: Arial, sans-serif; 
+      text-align: center; }
+input~input[type=text] {width:40px; border:1px solid #17aeea;vertical-align:3px}
+input[type=checkbox]{vertical-align:-5%;margin:0px 5px}
+input[type=number]{width:50px}
+label:hover{color:#1a8ae0}
+#sidebar {width:300px;background:#0f9dd9}
+video{max-width:100%;transform:scaleX(-1)}
+canvas{max-width:100%; max-height:320px}
+.columnsvg{position:absolute; left:520px; top: 62px}
+.Column2{position:absolute; left:350px; top:5cm;text-align: end;}
+form{padding:5px; line-height:2em}
+#msgbox{position:fixed; left:320px; bottom:20px; padding:6px}
+#webcam{display:none}
+button{cursor:pointer; border:0;padding:5px 10px;margin:0 20px}
+#tabbar {background:#f0fafa;}
+#tabbar button{margin:0}
+button{background:#c3d7e5;outline:none;font-weight:bold;color:#0c0d0d}
+button:hover{background:#4b9ae0 !important;color:#fff}
+#tabbar button.active{background:#bcc6cb}
+#imgselect,#webcam {text-align:justify;text-align-last:justify}
+.col{padding-top: 15px;}
+
+a:hover{color:rgb(21, 150, 226)}
+canvas{ /* checkerboard pattern */ 
+  background-color: #f5eaea;
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
+</style>
+<link rel=stylesheet href=range.css>
+
+<h2>Dots Algo</h2>
+<div id=sidebar>
+
+<div id=tabbar>
+<button id=tab1 onclick='tabImage()'>Image</button>
+</div>
+<div id=imgselect>
+<form>
+Canvas
+W:<input id=pcw type=number min=10 value=800 oninput='changeSize()'>
+H:<input id=pch type=number min=10 value=600 oninput='changeSize()'>
+</form>
+<canvas></canvas><br>
+<div>
+<button onclick='selectImage()'>Select image</button>
+<button id=tab2 onclick='tabWebcam()'>Use Webcam</button>
+</div>
+<div style="margin-left: 25%;">
+  <br>
+  <button onclick='useImage()'>Use image</button>
+</div>
+
+</div>
+<div id=webcam>
+<video autoplay></video>
+<button onclick='video.paused?video.play():video.pause()'>Pause</button>
+<button onclick='snapshot()'>Take Image</button>
+</div>
+
+<div class="Column2" style="align-items: center;">
+<form id=algoSelect>
+Algorithm: 
+<select id=algorithm onchange='loadWorker(this.value)'>
+<option value=dots.js >Dots</option>
+</select>
+<img id=buffering src=loading.gif style='vertical-align:middle; display:inline-block; visibility:hidden;'>
+</form>
+<button class="download" style='font-size:large; margin:10px ' onclick=download()>Download SVG</button>
+</div>
+</div>
+  <div class="col">
+      <form id=algoParams></form>
+  </div>
+</div>
+
+<div class="columnsvg">
+  <svg></svg>
+  </div>
+  <button id="printButton" onclick="printWithAxiDraw()">Print with AxiDraw</button>
+
+
+<div id=msgbox></div>
+
+
+<script src=helpers.js></script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+<script>
+preview=document.querySelector("canvas")
+prectx=preview.getContext("2d")
+svg=document.querySelector('svg');
+video=document.querySelector('video');
+canvas=document.createElement("canvas")
+ctx=canvas.getContext("2d")
+
+config = {};
+
+img = null;
+scale = 1;
+offset = [0,0]
+
+
+
+function checkScroll(){
+  svg.style.position= (window.innerWidth < canvas.width+320 || window.innerHeight < canvas.height+10) ? "absolute" : "fixed";
+}
+window.onresize=checkScroll;
+
+function changeSize(){
+  cw = parseInt(pcw.value)
+  ch = parseInt(pch.value)
+  preview.width=cw
+  preview.height=ch
+  draw()
+  checkScroll()
+}
+changeSize()
+
+function tabImage(){
+  if (video.srcObject && video.srcObject.getTracks().length) video.srcObject.getTracks()[0].stop()
+
+  webcam.style.display='none'
+  imgselect.style.display='block'
+  tab1.className='active'
+  tab2.className=''
+}
+tabImage()
+
+function selectImage(){
+  let d= document.createElement('input')
+  d.type='file'
+  d.onchange=function(e){
+    img = new Image();
+    img.onload=function(){
+      let w=img.width, h=img.height;
+
+      cw=parseInt(pcw.defaultValue) 
+
+      if (w>cw || h>ch) { ch=Math.round(cw*h/w) }
+      else if (w>10&&h>10){ch=h;cw=w}
+      preview.height = pch.value = ch 
+      preview.width = pcw.value = cw
+
+      scale = Math.min(ch/h, cw/w)
+      offset = [ cw/2, ch/2 ]
+      draw()
+    }
+  
+   
+    processedimage = removeBackgroundWithAPI(e.target.files[0]);
+  }
+  d.click()
+}
+function removeBackgroundWithAPI(file) {
+  const apiKey = 'mxubk7bvyq2vWwo9zqLu7xZb';
+
+  const formData = new FormData();
+  formData.append('image_file', file);
+
+  fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: {
+      'X-Api-Key': apiKey,
+    },
+    body: formData,
+  })
+        .then(function(reponse){
+                return reponse.blob()
+        })
+        .then(function(blob){
+                const url = URL.createObjectURL(blob);
+                imageURL = url;
+                
+                img.src = url;
+        })
+        .catch();
+}
+
+function draw(){
+  if (!img) return
+  prectx.clearRect(0,0,cw,ch)
+  prectx.drawImage(img, offset[0]-scale*img.width*0.5,offset[1]-scale*img.height*0.5, scale*img.width, scale*img.height)
+}
+preview.onmousedown=function(e){
+  let dx=e.clientX, dy=e.clientY
+  let csc = cw / preview.getBoundingClientRect().width
+
+  document.onmousemove=function(e){
+    let x=e.clientX-dx, y=e.clientY-dy
+    offset[0] += x*csc
+    offset[1] += y*csc
+    dx=e.clientX
+    dy=e.clientY
+    draw()
+    return false
+  }
+  document.onmouseup=function(){
+    document.onmousemove=null
+    document.onmouseup=null
+  }
+  return false
+}
+preview.addEventListener("wheel", function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  let os = scale
+  scale *= e.deltaY>0 ?1.1:0.9;
+  offset[0] = ((offset[0] -cw/2)/os)*scale +cw/2
+  offset[1] = ((offset[1] -ch/2)/os)*scale +ch/2
+  draw()
+},{passive:false});
+
+function tabWebcam(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("could not open webcam");
+  } else 
+    navigator.mediaDevices.getUserMedia({video: {width:800}}).then(function(v) {
+      video.srcObject = v;
+      webcam.style.display='block'
+      imgselect.style.display='none'
+      tab2.className='active'
+      tab1.className=''
+    }).catch((e)=>alert("error opening webcam"));
+}
+
+var imageset = false;
+function snapshot(){
+  imageset=true;
+  [canvas.width, canvas.height] = [video.videoWidth, video.videoHeight];
+  ctx.drawImage(video, 0, 0)
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const base64Image = canvas.toDataURL('image/png').split(',')[1];
+  console.log(imageData)
+  tabImage()
+  const apiKey = 'mxubk7bvyq2vWwo9zqLu7xZb';
+  fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: {
+      'X-Api-Key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      image_file_b64: base64Image,
+      size: 'auto', 
+    }),
+  })
+   .then(function(reponse){
+                return reponse.blob()
+        })
+        .then(function(blob){
+                img = new Image();
+                img.onload=function(){
+                  let w=img.width, h=img.height;
+
+                  cw=parseInt(pcw.defaultValue) 
+
+                  if (w>cw || h>ch) { ch=Math.round(cw*h/w) }
+                  else if (w>10&&h>10){ch=h;cw=w}
+                  preview.height = pch.value = ch 
+                  preview.width = pcw.value = cw
+
+                  scale = Math.min(ch/h, cw/w)
+                  offset = [ cw/2, ch/2 ]
+                  draw()
+                }
+                const url = URL.createObjectURL(blob);
+                console.log(img)
+                console.log(url)
+                 img.src = url;
+                 CustomselectImage(url)
+
+        })
+        .catch();
+    
+
+}
+function CustomselectImage(url){
+    img = new Image();
+
+    img.src = url;
+    img.onload=function(){
+      let w=img.width, h=img.height;
+
+      cw=parseInt(pcw.defaultValue) 
+
+      if (w>cw || h>ch) { ch=Math.round(cw*h/w) }
+      else if (w>10&&h>10){ch=h;cw=w}
+      preview.height = pch.value = ch 
+      preview.width = pcw.value = cw
+
+      scale = Math.min(ch/h, cw/w)
+      offset = [ cw/2, ch/2 ]
+      draw()
+
+    }
+
+}
+function useImage(){
+  console.log(img)
+  if (!img) return
+  imageset=true;
+  [canvas.width, canvas.height] = [cw, ch];
+  ctx.fillStyle='#fff'
+  ctx.fillRect(0,0,cw,ch)
+  ctx.drawImage(preview, 0,0)
+  checkScroll()
+  process()
+}
+
+function sendToWorker(msg){
+  if (!window.onmessage) myWorker.postMessage(msg)
+  else setTimeout(()=>window.onmessage({data:msg}),10)
+}
+function process(){
+  if (!imageset) return;
+  [config.width, config.height] = [canvas.width, canvas.height]
+  resetSVG()
+  loadWorker(window.algo)
+  sendToWorker([ window.config, ctx.getImageData(0,0,config.width,config.height) ]);
+}
+function ctrlChange(control){
+  if (!imageset) return;
+  if (!control.noRestart) 
+    process()
+  else
+    sendToWorker([ window.config ]);
+}
+function addController(control, form){
+  if (!control.type) control.type = "range"
+  let s = document.createElement("input")
+  Object.assign(s, control)
+  let l = document.createElement('label')
+  let p = document.createElement('div')
+
+  if (control.type !='checkbox'){
+    if (config[control.label]) control.value = config[control.label];
+    else config[control.label] = control.value;
+  }
+
+  if (control.type=='select') {
+    s = document.createElement('select')
+    s.oninput=e=>{config[control.label] = s.value; ctrlChange(control)}
+    for (let i in control.options) {
+      let selected = control.options[i]==config[control.label]
+      s.append(new Option( control.options[i], control.options[i], selected, selected ))
+    }
+    l.append(control.label+': ')
+    l.append(s)
+    p.append(l)
+    form.append(p)
+    return
+  } else if (control.type=='checkbox') {
+    if (config[control.label]!==undefined) s.checked = config[control.label]
+    s.oninput=e=>{config[control.label] = s.checked; ctrlChange(control)}
+    config[control.label] = s.checked
+    l.append(s)  
+  } else {
+    let n = document.createElement('input')
+    n.type="text" 
+    n.pattern="\-?[0-9]+\.?[0-9]*"
+    s.oninput=e=>{config[control.label] = Number( n.value = s.value ); ctrlChange(control)}
+    n.oninput=e=>{config[control.label] = Number( s.value = n.value ); ctrlChange(control)}
+    n.onkeydown=function(e){
+      if (e.keyCode!=38 && e.keyCode!=40) return;
+      n.value = parseFloat(n.value) + (e.keyCode==38?1:-1) * (control.step || 1)
+
+      if (control.step && control.step != Math.round(control.step))
+        n.value = parseFloat( (n.value*1).toFixed( control.step.toString().split('.')[1].length ) )
+
+      n.oninput()
+    };
+    s.value = n.value = config[control.label] 
+    p.append(s);
+    p.append(n)
+  }
+  l.append(control.label)
+  l.append(p)
+  form.append(l)
+
+}
+
+function appendScript(src) {
+  var script = document.createElement('script');
+  script.setAttribute('type', 'text/javascript');
+  script.setAttribute('src', src);
+  document.head.append(script);
+}
+
+function loadWorker(src){
+  buffering.style.visibility='visible'
+  if (window.myWorker) myWorker.terminate()
+
+  if (window.location.protocol == 'file:') {
+    window.myWorker={terminate:()=>{}}
+    window.importScripts=function(...args){
+      for (let a of args) appendScript(a)
+    }
+    window.postMessage=function(msg){
+      myWorker.onmessage({data:msg})
+    }
+    appendScript(src)
+
+  } else window.myWorker = new Worker(src);
+
+  msgbox.innerHTML = "";
+
+  myWorker.onmessage = function(msg) {
+    let [type, data] = msg.data
+
+    if (type == 'sliders') {
+      buffering.style.visibility='hidden'
+      if (src==window.algo) return;
+      window.algo=src
+      algoParams.innerHTML="";
+      data.forEach(c=>{
+        if(c.type != "checkbox")
+        {
+          console.log(c)
+          addController( c, algoParams )
+        }
+      
+      })
+     
+      process()
+
+    } else if (type == 'msg') {
+      msgbox.innerHTML = data;
+
+    } else if (type == 'dbg'){
+      window.data = data
+
+    }else if (type == 'svg-path'){
+      mainpath.setAttributeNS(null, "d", data) 
+    } 
+  }
+}
+
+const svgNS = "http://www.w3.org/2000/svg"
+function resetSVG(){
+  let c; while (c = svg.firstChild) svg.removeChild(c)
+  svg.setAttribute("width",config.width)
+  svg.setAttribute("height",config.height)
+  svg.setAttribute("viewBox", `0 0 ${config.width} ${config.height}`)
+  svg.style.background=config.Inverted?"black":"white";
+  window.mainpath=document.createElementNS(svgNS, "path");
+  mainpath.setAttributeNS(null, "style", "stroke-width: 2px; fill: none; stroke: " + (config.Inverted?"white":"black"))
+  svg.appendChild(mainpath)
+}
+
+function download(){
+  const svgString = '<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+    + (new XMLSerializer()).serializeToString(svg);
+  const blob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+
+  const downloadLink = document.createElement("a");
+  downloadLink.href = URL.createObjectURL(blob);
+  downloadLink.download = window.algo.replace('.js','_') + Date.now() + ".svg";
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+
+}
+
+function printWithAxiDraw() {
+  const svgString = '<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+    + (new XMLSerializer()).serializeToString(svg);
+
+
+  const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+
+
+  const reader = new FileReader();
+  reader.onloadend = function () {
+    const arrayBuffer = reader.result;
+
+
+    sendToAxiDraw(arrayBuffer);
+  };
+  reader.readAsArrayBuffer(blob);
+}
+
+function sendToAxiDraw(arrayBuffer) {
+  // need to replace the placeholder URL with the actual endpoint
+  const axiDrawApiEndpoint = 'https://your-axidraw-api-endpoint';
+  
+  fetch(axiDrawApiEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+    },
+    body: arrayBuffer,
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to communicate with AxiDraw pen plotter');
+    }
+    console.log('Print successful!');
+  })
+  .catch(error => {
+    console.error(error);
+    alert('Failed to print with AxiDraw. Check console for details.');
+  });
+}
+
+algorithm.onchange()
+
+</script>
