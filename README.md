@@ -30,7 +30,6 @@ Used Axicli to connect or communicate with the penplotterS
 
 # Additional Notes
 -This tool utilizes the Remove.bg API for background removal. Ensure a stable internet connection for optimal functionality.
--AxiDraw integration requires a valid AxiDraw API endpoint. Replace the placeholder URL in the code with the actual endpoint.
 
 # Credits
 Remove.bg API: https://www.remove.bg/
