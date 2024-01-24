@@ -34,3 +34,4 @@ Used Axicli to connect or communicate with the penplotterS
 # Credits
 Remove.bg API: https://www.remove.bg/
 AxiDraw Pen Plotter: https://www.axidraw.com/
+AxiCli : https://axidraw.com/doc/cli_api/#introduction
